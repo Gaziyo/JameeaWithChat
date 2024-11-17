@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isValidContentType() {
+      return request.resource.contentType.matches('application/pdf')
+        || request.resource.contentType.matches('application/msword')
+        || request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*')
+        || request.resource.contentType.matches('audio/.*')
+        || request.resource.contentType.matches('video/.*')
+        || request.resource.contentType.matches('image/.*');
+    }
+    
+    function isValidFileSize() {
+      return request.resource.size < 10 * 1024 * 1024; // 10MB limit
+    }
+
+    // Documents folder
+    match /documents/{userId}/{fileName} {
+      allow read: if isAuthenticated() && isOwner(userId);
+      allow create: if isAuthenticated() 
+        && isOwner(userId)
+        && isValidContentType()
+        && isValidFileSize();
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Audio messages
+    match /audio/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && isOwner(userId)
+        && request.resource.contentType.matches('audio/.*')
+        && request.resource.size < 5 * 1024 * 1024; // 5MB limit
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+
+    // Profile images
+    match /profiles/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() 
+        && isOwner(userId)
+        && request.resource.contentType.matches('image/.*')
+        && request.resource.size < 2 * 1024 * 1024; // 2MB limit
+      allow delete: if isAuthenticated() && isOwner(userId);
+    }
+  }
+}
